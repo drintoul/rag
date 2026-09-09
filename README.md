@@ -31,6 +31,12 @@ docker compose up -d --build
 - **Query UI**: http://localhost:8771 — pick a collection and ask questions in plain English. Curated answers include a numbered **Sources** list mapping `[n]` citations to their links. **Pro Mode** reveals the scored chunks behind each answer and a "Documents in this knowledge base" list. Mobile viewports get a desktop-required splash.
 - **API docs**: http://localhost:8765/docs
 
+### Screenshots
+
+![Query UI](docs/query-ui.png)
+
+![Admin UI](docs/admin-ui.png)
+
 ## Configuration
 
 Copy `.env.example` to `.env` and adjust:
