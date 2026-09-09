@@ -177,15 +177,13 @@ async def generate_answer(query: str, hits: list[dict], model: Optional[str] = N
     context_block = "\n\n".join(blocks)
     prompt = (
         "You are a helpful assistant. Answer the question using ONLY the context below. "
-        "Each context block is numbered and may have a source label in parentheses. "
-        "When blocks come from different sources or entities (e.g. different cruise lines), "
-        "clearly attribute each part of your answer to its source — never blend policies or facts "
-        "across sources into a single undifferentiated answer. "
-        "Cite the specific source for each fact using its source label from the context. "
-        "Begin with the source name, e.g. 'According to the British North America Act, 1867, …' or 'As stated in [source label], …'. "
+        "Synthesize the information into a clear, flowing answer. Do not repeat the same fact or restate the question. "
+        "Do not begin every sentence with 'According to' or repeat the source title inside the answer. "
+        "Cite sources using ONLY the short bracket number [n] from the relevant context block, placed naturally at the end of the relevant clause or sentence. "
+        "Do not include source titles, URLs, or labels in the answer body — the Sources list shows them. "
+        "When blocks come from different sources or entities (e.g. different cruise lines), clearly attribute each part of your answer to its source; never blend policies or facts across sources into a single undifferentiated answer. "
         "Do NOT say 'according to the context', 'the context states', or other generic phrases. "
-        "do NOT append bracketed citations like '(Source: [1] …)' — the UI lists sources separately. "
-        "Include ALL relevant details from the context (e.g. every location, date, or option mentioned). "
+        "Include ALL relevant details from the context (e.g. every location, date, or option mentioned), but present them concisely without repeating the same information. "
         "If the context does not contain the answer, say so. Be concise but complete.\n\n"
         f"Context:\n{context_block}\n\nQuestion: {query}\nAnswer:"
     )
