@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG — Semantic Search</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234dd0e1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cellipse cx='12' cy='5' rx='9' ry='3'/%3E%3Cpath d='M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5'/%3E%3Cpath d='M3 12c0 1.66 4 3 9 3s9-1.34 9-3'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0a0f1e; --panel: #121a2e; --panel2: #18223c; --border: #27355a;
+    --accent: #7aa2ff; --accent2: #4de3b5; --text: #eaeefb; --muted: #8d97b6; --radius: 16px;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: radial-gradient(1000px 500px at 20% -10%, #1e2c58 0%, var(--bg) 60%);
+    color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 48px 24px;
+  }
+  .hero { text-align: center; margin-bottom: 36px; }
+  .hero h1 { font-size: 34px; font-weight: 800; letter-spacing: -1px; }
+  .hero h1 span { background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p { color: var(--muted); margin-top: 8px; font-size: 15px; }
+  .search-box {
+    width: min(720px, 100%); background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; box-shadow: 0 12px 40px rgba(0,0,0,.35);
+  }
+  .row { display: flex; gap: 10px; }
+  input, select {
+    background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 10px; padding: 12px 14px; font-size: 15px; font-family: inherit;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  #q { flex: 1; }
+  button {
+    background: linear-gradient(90deg, var(--accent), #5577f2); color: #fff; border: none;
+    border-radius: 10px; padding: 12px 26px; font-size: 15px; font-weight: 700; cursor: pointer;
+  }
+  button:disabled { opacity: .5; }
+  .opts { display: flex; gap: 14px; margin-top: 14px; flex-wrap: wrap; }
+  .opts .field { flex: 1 1 220px; min-width: 200px; display: flex; flex-direction: column; gap: 4px; }
+  .opts .field.wide { flex: 1 1 100%; }
+  .opts .field.half { flex: 1 1 140px; min-width: 140px; }
+  .opts .field.third { flex: 1 1 160px; min-width: 160px; }
+  .opts .field.third .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .opts .field .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .opts select, .opts input { width: 100%; font-size: 14px; padding: 10px 14px; }
+  .opts input[type="checkbox"] { width: auto; }
+  .opts label { flex: 1 1 100%; }
+  .results { width: min(720px, 100%); margin-top: 28px; }
+  .hit {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 20px; margin-bottom: 14px; animation: fade .3s ease;
+  }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } }
+  .hit .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .score { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+    background: var(--panel2); border: 1px solid var(--accent2); color: var(--accent2); }
+  .hit .text { font-size: 15px; line-height: 1.55; white-space: pre-line; word-break: break-word; }
+  .hit .text.clamped {
+    display: -webkit-box; -webkit-line-clamp: 6; line-clamp: 6; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .hit .expand { background: none; border: none; color: var(--accent); font-size: 12px;
+    padding: 4px 0 0; cursor: pointer; font-weight: 600; }
+  .hit .meta { margin-top: 10px; font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+  .empty { color: var(--muted); text-align: center; padding: 30px; }
+  .answer {
+    width: min(720px, 100%); margin: 28px auto 0; background: linear-gradient(135deg, #16213e, #12283a);
+    border: 1px solid var(--accent2); border-radius: var(--radius); padding: 20px 22px;
+    box-shadow: 0 8px 30px rgba(77,227,181,.08); animation: fade .3s ease;
+  }
+  .answer .label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--accent2); margin-bottom: 10px; display: flex; justify-content: space-between; }
+  .answer .label .model { color: var(--muted); font-weight: 500; text-transform: none; letter-spacing: 0; }
+  .answer .body { font-size: 15px; line-height: 1.65; }
+  .answer .body h1, .answer .body h2, .answer .body h3, .answer .body h4 {
+    font-size: 16px; margin: 14px 0 6px; color: var(--accent2); }
+  .answer .body p { margin: 8px 0; }
+  .answer .body ul, .answer .body ol { margin: 6px 0 10px 22px; }
+  .answer .body li { margin: 3px 0; }
+  .answer .body strong { color: #fff; }
+  .answer .srcs { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .answer .srcs-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 6px; }
+  .answer .srcs ol { margin: 0 0 0 20px; font-size: 13px; }
+  .answer .srcs li { margin: 3px 0; }
+  .answer .srcs a { color: var(--accent); text-decoration: none; }
+  .answer .srcs a:hover { text-decoration: underline; }
+  .docs-box {
+    width: min(720px, 100%); margin-top: 18px; background: var(--panel);
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 18px;
+  }
+  .docs-box summary { cursor: pointer; color: var(--muted); font-size: 14px; user-select: none; }
+  .docs-box summary:hover { color: var(--text); }
+  .docs-box ul { list-style: none; padding: 0; margin: 12px 0 4px; max-height: 260px; overflow-y: auto; }
+  .docs-box li { padding: 7px 4px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .docs-box li:last-child { border-bottom: none; }
+  .docs-box li a { color: var(--accent); text-decoration: none; }
+  .docs-box li a:hover { text-decoration: underline; }
+  .docs-box li .n { color: var(--muted); font-size: 11px; margin-left: 6px; }
+  .gen-toggle { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+  .gen-toggle input { width: auto; }
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--muted);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -3px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .link { color: var(--accent); text-decoration: none; font-size: 13px; }
+  .preamble {
+    width: min(720px, 100%); margin: -18px auto 24px; text-align: center;
+    font-size: 13px; color: var(--muted); line-height: 1.6;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 18px;
+  }
+  footer { width: min(720px, 100%); margin-top: 40px; padding-bottom: 24px; }
+  footer p {
+    font-size: 12px; color: var(--muted); text-align: center;
+    border-top: 1px solid var(--border); padding-top: 16px; line-height: 1.6;
+  }
+  #mobileSplash {
+    display: none; position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); align-items: center; justify-content: center;
+    text-align: center; padding: 32px;
+  }
+  #mobileSplash .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 32px 28px; max-width: 340px;
+  }
+  #mobileSplash h2 { font-size: 20px; margin-bottom: 12px; }
+  #mobileSplash p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+  @media (max-width: 768px) { #mobileSplash { display: flex; } }
+</style>
+</head>
+<body>
+<div id="mobileSplash">
+  <div class="card">
+    <h2>Desktop Required</h2>
+    <p>This system is designed for larger screens. Please visit on a desktop or laptop computer to use it.</p>
+  </div>
+</div>
+<div class="hero">
+  <h1>RAG <span>Semantic Search</span></h1>
+  <p>Ask questions in plain language — answers come from your own documents</p>
+  <div style="margin-top:10px;display:flex;justify-content:center;gap:8px">
+    <a href="https://davidrintoul.info" target="_blank" rel="noreferrer"
+       style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.08);border:1px solid var(--border);color:var(--muted);font-size:12px;font-weight:500;border-radius:999px;padding:5px 14px;text-decoration:none">
+      by David Rintoul
+    </a>
+    <a href="https://github.com/drintoul/rag-demo" target="_blank" rel="noreferrer"
+       style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.08);border:1px solid var(--border);color:var(--muted);font-size:12px;font-weight:500;border-radius:999px;padding:5px 14px;text-decoration:none">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.15c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.75 2.69 1.25 3.35.95.1-.74.4-1.25.72-1.53-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 5.78 0c2.21-1.49 3.18-1.18 3.18-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.67.41.35.77 1.05.77 2.12v3.15c0 .3.21.67.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
+      Source
+    </a>
+  </div>
+</div>
+
+<div class="preamble">
+  <p style="text-align:left;font-size:15px;color:var(--text)">
+    This site demonstrates the business value of <strong>Retrieval-Augmented
+    Generation (RAG)</strong>: instead of relying on an AI model's built-in
+    knowledge, answers are generated from <em>your own knowledge base</em> —
+    content you control is retrieved and injected into the AI's prompt, so
+    responses reflect your curated, up-to-date information rather than whatever
+    the model happened to learn during training.
+  </p>
+  <p style="margin-top:10px;text-align:left">
+    Under the hood: web pages are scraped (Firecrawl), cleaned, chunked, and
+    embedded (<code>bge-m3</code>) into a Qdrant vector store. Queries run a
+    two-stage retrieval: semantic search casts a wide net for
+    <strong>recall</strong> — fetching every chunk that might be relevant —
+    then a cross-encoder (<code>bge-reranker-v2-m3</code>) reranks those
+    candidates for <strong>precision</strong>, keeping only the best. A local
+    LLM (<code>llama3.1:8b</code>) composes the answer with per-source
+    attribution. Pick a <strong>collection</strong> to try different use cases —
+    legal, medical, financial, or any other knowledge base you load — and toggle
+    <strong>Pro Mode</strong> to inspect the scored chunks behind each answer
+    and browse the documents in the collection.
+  </p>
+  <p style='margin-top:12px;padding:12px 16px;background:rgba(255,107,107,0.08);border:1px solid #ff6b6b;border-radius:10px;font-size:13px;line-height:1.6;color:#eaeefb;'>
+    <strong style='color:#ff6b6b;'>⚠️ This is a Demo</strong><br>
+    This is a self-hosted, unauthenticated demo of a full RAG pipeline:
+    scrape → clean → chunk → embed → search → rerank → answer.
+    That makes the knowledge base easy to demonstrate, but also easy
+    to poison — exactly the kind of real-world risk companies face
+    when write access is not protected. In production this sits behind
+    auth, rate limits, domain allowlists, and an identity-aware proxy.
+    Full technical details and the production threat model are in the
+    <a href='https://github.com/drintoul/rag-demo' target='_blank' rel='noreferrer' style='color:#ff6b6b;text-decoration:underline;'>GitHub README</a>.
+  </p>
+</div>
+
+<div class="search-box">
+  <div class="row">
+    <input id="q" placeholder="Ask something…" onkeydown="if(event.key==='Enter')search()">
+    <button id="go" onclick="search()">Search</button>
+    <div class="gen-toggle" style="margin-top:0;flex:0 0 auto">
+      <label for="pro" style="cursor:pointer">Pro Mode</label>
+      <input type="checkbox" id="pro" onchange="togglePro()">
+    </div>
+  </div>
+  <div class="opts">
+    <div class="field wide">
+      <span class="lbl">Collection</span>
+      <select id="collection" title="Vector collection to search" onchange="loadDocs(this.value)"></select>
+    </div>
+  </div>
+  <details class='docs-box' id='docsBox' style='display:none'>
+    <summary>Documents in this knowledge base</summary>
+    <ul id='docsList'><li class='empty'>Loading…</li></ul>
+  </details>
+</div>
+
+<div id='answerBox'></div>
+<div class='results' id='results'></div>
+
+<footer>
+  <p>
+    Disclaimer: This tool uses AI to retrieve and summarize publicly available information and can make mistakes. Answers are generated from the source documents listed above, but errors and omissions are still possible. The author is not responsible for decisions made based on this information. Always verify important details with the official source.
+  </p>
+</footer>
+
+<script>
+const API = `http://${location.hostname}:8765/api`;
+const absUrl = u => /^https?:\/\//i.test(u) ? u : 'https://' + u;
+
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+}
+
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function renderMarkdown(md) {
+  const lines = esc(md).split('\n');
+  let html = '', inList = null;
+  const inline = t => t
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+  const closeList = () => { if (inList) { html += `</${inList}>`; inList = null; } };
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) { closeList(); continue; }
+    const h = t.match(/^(#{1,4})\s+(.*)/);
+    if (h) { closeList(); html += `<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`; continue; }
+    if (/^[*-]\s+/.test(t)) {
+      if (inList !== 'ul') { closeList(); html += '<ul>'; inList = 'ul'; }
+      html += `<li>${inline(t.replace(/^[*-]\s+/, ''))}</li>`; continue;
+    }
+    if (/^\d+[.)]\s+/.test(t)) {
+      if (inList !== 'ol') { closeList(); html += '<ol>'; inList = 'ol'; }
+      html += `<li>${inline(t.replace(/^\d+[.)]\s+/, ''))}</li>`; continue;
+    }
+    closeList(); html += `<p>${inline(t)}</p>`;
+  }
+  closeList();
+  return html;
+}
+
+function togglePro() {
+  const on = document.getElementById('pro').checked;
+  localStorage.setItem('proMode', on ? '1' : '0');
+  document.getElementById('docsBox').style.display = on ? 'block' : 'none';
+  if (on) loadDocs(document.getElementById('collection').value || undefined);
+  else document.getElementById('results').innerHTML = '';
+}
+
+async function loadCollections() {
+  try {
+    const [{ collections }, s] = await Promise.all([api('/collections'), api('/settings')]);
+    const visible = collections.filter(c => !c.name.startsWith('private'))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const sel = document.getElementById('collection');
+    sel.innerHTML = visible.length
+      ? visible.map(c => `<option value="${c.name}">${c.name} (${c.points ?? 0} pts)</option>`).join('')
+      : '<option value="">— no collections —</option>';
+    if (s.collection) sel.value = s.collection;
+  } catch {}
+}
+
+async function search() {
+  const q = document.getElementById('q').value.trim();
+  const results = document.getElementById('results');
+  if (!q) return;
+  const pro = document.getElementById('pro').checked;
+  document.getElementById('go').disabled = true;
+  results.innerHTML = pro ? '<div class="empty"><span class="spinner"></span> Searching…</div>' : '';
+  try {
+    const body = {
+      query: q,
+      collection: document.getElementById('collection').value || undefined,
+    };
+    const r = await api('/query', { method: 'POST', body: JSON.stringify(body) });
+    if (r.answer) {
+      const cited = [...new Set([...r.answer.matchAll(/\[(\d+)\]/g)].map(m => parseInt(m[1]) - 1))].filter(i => r.results[i]);
+      const srcList = cited.length
+        ? `<div class="srcs"><div class="srcs-label">Sources</div><ol>${cited.map(i => {
+            const p = r.results[i].payload || {};
+            const title = p.title || p.source || `Result ${i + 1}`;
+            return `<li>${p.source ? `<a href="${absUrl(p.source)}" target="_blank" rel="noopener">${title}</a>` : title}</li>`;
+          }).join('')}</ol></div>`
+        : '';
+      document.getElementById('answerBox').innerHTML = `<div class="answer"><div class="label">Curated Answer <span class="model">${r.llm_model || ''}</span></div><div class="body">${renderMarkdown(r.answer)}</div>${srcList}</div>`;
+    } else {
+      document.getElementById('answerBox').innerHTML = '';
+    }
+    if (!pro) { results.innerHTML = ''; return; }
+    if (!r.results.length) { results.innerHTML = '<div class="empty">No results found.</div>'; return; }
+    results.innerHTML = r.results.map(h => {
+      const { text = '', ...meta } = h.payload || {};
+      return `<div class="hit">
+        <div class="head"><span style="font-size:12px;color:var(--muted);font-family:monospace">${h.id.slice(0,8)}…</span>
+        <span class="score">${h.rerank_score != null ? (r.reranker === 'llm' ? 'rerank ' + h.rerank_score.toFixed(0) + '/10 · ' : 'rerank ' + h.rerank_score.toFixed(3) + ' · ') : ''}${(h.score * 100).toFixed(1)}%</span></div>
+        <div class="text clamped">${text.replace(/</g, '&lt;')}</div>
+        ${text.split('\n').length > 6 || text.length > 500 ? '<button class="expand" onclick="const t=this.previousElementSibling;t.classList.toggle(\'clamped\');this.textContent=t.classList.contains(\'clamped\')?\'Show more\':\'Show less\'">Show more</button>' : ''}
+        <div class="meta">${Object.entries(meta).map(([k, v]) => `<span class="tag">${k}: ${v}</span>`).join('')}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    document.getElementById('answerBox').innerHTML = '';
+    results.innerHTML = `<div class="empty" style="color:#ff6b6b">${e.message}</div>`;
+  } finally {
+    document.getElementById('go').disabled = false;
+  }
+}
+
+async function loadDocs(collection) {
+  const list = document.getElementById('docsList');
+  list.innerHTML = '<li class="empty">Loading…</li>';
+  try {
+    const col = collection || (await api('/settings')).collection;
+    if (!col) { list.innerHTML = '<li class="empty">No collection configured.</li>'; return; }
+    const { docs } = await api(`/collections/${col}/docs`);
+    docs.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    list.innerHTML = docs.length
+      ? docs.map(d => `<li>${d.source ? `<a href="${absUrl(d.source)}" target="_blank" rel="noopener">${d.title}</a>` : d.title}<span class="n">${d.chunks} chunk${d.chunks === 1 ? '' : 's'}</span></li>`).join('')
+      : '<li class="empty">No documents yet.</li>';
+  } catch { list.innerHTML = '<li class="empty">Could not load documents.</li>'; }
+}
+
+loadCollections();
+if (localStorage.getItem('proMode') === '1') {
+  document.getElementById('pro').checked = true;
+  togglePro();
+}
+</script>
+</body>
+</html>

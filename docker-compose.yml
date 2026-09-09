@@ -1,0 +1,97 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    container_name: rag-qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_HTTP_PORT:-6353}:6333"
+      - "${QDRANT_GRPC_PORT:-6354}:6334"
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    networks:
+      - rag-network
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/localhost/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  reranker:
+    build: ./reranker
+    container_name: rag-reranker
+    restart: unless-stopped
+    environment:
+      RERANK_MODEL: ${RERANK_MODEL:-BAAI/bge-reranker-v2-m3}
+      HF_HOME: /data
+    volumes:
+      - ./data/reranker:/data
+    networks:
+      - rag-network
+
+  backend:
+    build: ./backend
+    container_name: rag-backend
+    restart: unless-stopped
+    environment:
+      QDRANT_HOST: ${QDRANT_HOST:-rag-qdrant}
+      QDRANT_PORT: ${QDRANT_PORT:-6333}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      EMBED_MODEL: ${EMBED_MODEL:-nomic-embed-text}
+      EMBED_DIM: ${EMBED_DIM:-768}
+      LLM_MODEL: ${LLM_MODEL:-llama3.2:latest}
+      RERANKER_URL: ${RERANKER_URL:-http://reranker:80}
+      FIRECRAWL_URL: ${FIRECRAWL_URL:-http://firecrawl-api:3002}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+      SETTINGS_FILE: /data/settings.json
+    volumes:
+      - ./data/backend:/data
+    ports:
+      - "${BACKEND_PORT:-8765}:8000"
+    networks:
+      - rag-network
+      - app-network
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  admin-ui:
+    image: nginx:alpine
+    container_name: rag-admin-ui
+    restart: unless-stopped
+    volumes:
+      - ./admin-ui:/usr/share/nginx/html:ro
+    ports:
+      - "${ADMIN_UI_PORT:-8770}:80"
+    networks:
+      - rag-network
+    depends_on:
+      - backend
+
+  query-ui:
+    image: nginx:alpine
+    container_name: rag-query-ui
+    restart: unless-stopped
+    volumes:
+      - ./query-ui:/usr/share/nginx/html:ro
+    ports:
+      - "${QUERY_UI_PORT:-8771}:80"
+    networks:
+      - rag-network
+    depends_on:
+      - backend
+
+networks:
+  rag-network:
+    driver: bridge
+  app-network:
+    external: true

@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG — Vector Store Admin</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234dd0e1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cellipse cx='12' cy='5' rx='9' ry='3'/%3E%3Cpath d='M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5'/%3E%3Cpath d='M3 12c0 1.66 4 3 9 3s9-1.34 9-3'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0b1020; --panel: #131a30; --panel2: #1a2340; --border: #26335c;
+    --accent: #6c8cff; --accent2: #38d9a9; --danger: #ff6b6b; --text: #e8ecf8;
+    --muted: #8b96b8; --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: radial-gradient(1200px 600px at 80% -10%, #1c2a55 0%, var(--bg) 55%);
+    color: var(--text); min-height: 100vh; padding: 32px;
+  }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; max-width: 1200px; margin-left: auto; margin-right: auto; flex-wrap: wrap; gap: 12px; }
+  h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+  h1 span { background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .status { display: flex; gap: 14px; font-size: 13px; color: var(--muted); }
+  .pill { padding: 5px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--border); }
+  .pill.ok { color: var(--accent2); border-color: var(--accent2); }
+  .pill.bad { color: var(--danger); border-color: var(--danger); }
+  .grid { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 24px; max-width: 1200px; margin: 0 auto; }
+  .grid > div { min-width: 0; }
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .card h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 14px; }
+  input, select, textarea {
+    width: 100%; background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 10px 12px; font-size: 14px; margin-bottom: 10px; font-family: inherit;
+  }
+  textarea { min-height: 110px; resize: vertical; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+  button {
+    background: linear-gradient(90deg, var(--accent), #4f6ef0); color: #fff; border: none;
+    border-radius: 8px; padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: transform .1s, opacity .1s;
+  }
+  button:hover { transform: translateY(-1px); }
+  button:disabled { opacity: .5; cursor: default; transform: none; }
+  button.ghost { background: var(--panel2); border: 1px solid var(--border); }
+  button.danger { background: var(--danger); }
+  .col-item {
+    display: flex; justify-content: space-between; align-items: center; padding: 12px 14px;
+    border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; cursor: pointer;
+    background: var(--panel2); transition: border-color .15s;
+  }
+  .col-item:hover, .col-item.active { border-color: var(--accent); }
+  .col-item .name { font-weight: 600; }
+  .col-item .meta { font-size: 12px; color: var(--muted); }
+  .col-item .del { background: none; border: none; color: var(--danger); font-size: 16px; padding: 4px 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  th:nth-child(1), td:nth-child(1) { width: 90px; }
+  th:nth-child(3), td:nth-child(3) { width: 220px; }
+  th:nth-child(4), td:nth-child(4) { width: 110px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; padding: 8px; border-bottom: 1px solid var(--border); }
+  td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; max-width: 400px; overflow-wrap: anywhere; word-break: break-word; }
+  td .text {
+    display: -webkit-box; -webkit-line-clamp: 5; line-clamp: 5; -webkit-box-orient: vertical;
+    overflow: hidden; max-width: 100%; white-space: pre-line; word-break: break-word;
+  }
+  .row-actions { white-space: nowrap; display: flex; gap: 6px; }
+  .row-actions button {
+    padding: 7px; border-radius: 8px; display: inline-flex; align-items: center;
+    background: var(--panel2); border: 1px solid var(--border); color: var(--muted);
+  }
+  .row-actions button svg { width: 16px; height: 16px; }
+  .row-actions button:hover { border-color: var(--accent); color: var(--accent); }
+  .row-actions button.del:hover { border-color: var(--danger); color: var(--danger); }
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; background: var(--panel2); border: 1px solid var(--accent);
+    padding: 12px 20px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .3s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+  .toast.err { border-color: var(--danger); }
+  .empty { color: var(--muted); font-size: 14px; padding: 20px; text-align: center; }
+  .kv { display: flex; gap: 8px; }
+  .chipbox { margin-top: 10px; }
+  .chipbox .hint { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 220px; overflow-y: auto; margin-bottom: 10px; }
+  .chips .group-label { width: 100%; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-top: 6px; }
+  .chip {
+    font-family: monospace; font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    background: var(--panel2); border: 1px solid var(--border); cursor: pointer; user-select: none;
+    transition: border-color .1s;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .chip .n { color: var(--muted); font-size: 10px; margin-left: 4px; }
+  .chip.in-inc { border-color: var(--accent2); background: rgba(56,217,169,.12); }
+  .chip.in-exc { border-color: var(--danger); background: rgba(255,107,107,.12); }
+  .kv input { margin-bottom: 0; }
+  #metaRows .kv { margin-bottom: 8px; }
+  .link { color: var(--accent); text-decoration: none; font-size: 13px; }
+  .section-gap { margin-top: 24px; }
+  #mobileSplash {
+    display: none; position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); align-items: center; justify-content: center;
+    text-align: center; padding: 32px;
+  }
+  #mobileSplash .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 32px 28px; max-width: 340px;
+  }
+  #mobileSplash h2 { font-size: 20px; margin-bottom: 12px; }
+  #mobileSplash p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+  @media (max-width: 768px) { #mobileSplash { display: flex; } }
+</style>
+</head>
+<body>
+<div id="mobileSplash">
+  <div class="card">
+    <h2>Desktop Required</h2>
+    <p>This system is designed for larger screens. Please visit on a desktop or laptop computer to use it.</p>
+  </div>
+</div>
+<header>
+  <h1>RAG <span>Vector Store Admin</span></h1>
+  <div class="status" id="status"></div>
+</header>
+
+<div class="grid">
+  <div>
+    <div class="card">
+      <h2>Collections</h2>
+      <div id="collections"><div class="empty">Loading…</div></div>
+      <div class="section-gap">
+        <input id="newColName" placeholder="New collection name">
+        <select id="newColDist">
+          <option value="cosine">Cosine</option>
+          <option value="euclid">Euclid</option>
+          <option value="dot">Dot</option>
+        </select>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:10px" title="Private collections are hidden from the Query UI">
+          <input type="checkbox" id="newColPrivate" style="width:auto;margin:0"> Private (hidden from Query UI)
+        </label>
+        <button onclick="createCollection()" style="width:100%">Create Collection</button>
+      </div>
+      <h2 class="section-gap">Query Settings</h2>
+      <input id="qsTopk" type="number" min="1" max="50" placeholder="Results to return (top_k)">
+      <input id="qsCandk" type="number" min="1" max="200" placeholder="Candidate K (rerank pool)">
+      <input id="qsThresh" type="number" step="0.05" min="0" max="1" placeholder="Min score (optional)">
+      <div class="kv">
+        <input id="qsFkey" placeholder="filter key">
+        <input id="qsFval" placeholder="filter value">
+      </div>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:14px 0 8px">
+        <input type="checkbox" id="qsGen" style="width:auto;margin:0"> Generate curated answer with LLM
+      </label>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:10px">
+        <input type="checkbox" id="qsRerank" style="width:auto;margin:0"> Rerank with cross-encoder
+      </label>
+      <div style="margin-bottom:10px">
+        <label style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px">
+          <span>hnsw_ef — search accuracy <span id="qsHnswefVal"></span></span>
+          <label style="display:flex;gap:6px;align-items:center" title="Bypass the approximate HNSW index and score every vector — slower but exact">
+            <input type="checkbox" id="qsExact" style="width:auto;margin:0"> Exact search
+          </label>
+        </label>
+        <input id="qsHnswef" type="range" min="0" max="512" step="8" value="0" style="padding:0" title="HNSW search accuracy — higher = slower but more accurate (0 = index default)" oninput="document.getElementById('qsHnswefVal').textContent = this.value > 0 ? '[' + this.value + ']' : '[default]'">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)"><span>← Faster</span><span>More accurate →</span></div>
+      </div>
+      <button class="ghost" onclick="saveSettings()" style="width:100%">Save Query Settings</button>
+    </div>
+  </div>
+
+  <div>
+    <div class="card" id="ingestCard" style="display:none">
+      <h2>Ingest Documents → <span id="ingestTarget"></span></h2>
+      <textarea id="docText" placeholder="Document text (one doc per line for batch ingest, or a single block)"></textarea>
+      <div id="metaRows">
+        <div class="kv"><input placeholder="metadata key" class="mk"><input placeholder="value" class="mv"></div>
+      </div>
+      <button class="ghost" onclick="addMetaRow()" style="margin-bottom:10px">+ Metadata</button>
+      <div style="display:flex;gap:10px">
+        <button id="ingestBtn" onclick="ingest(false)">Ingest Single Doc</button>
+        <button class="ghost" onclick="ingest(true)">Ingest Lines as Batch</button>
+        <button class="ghost" id="cancelEdit" style="display:none" onclick="cancelEdit()">Cancel Edit</button>
+      </div>
+      <h2 class="section-gap">Scrape URL → <span id="scrapeTarget"></span></h2>
+      <input id="scrapeUrl" placeholder="https://example.com/article">
+      <input id="scrapeInclude" placeholder="Include selectors, comma-separated (e.g. .main-wrapper, main)">
+      <input id="scrapeExclude" placeholder="Exclude selectors, comma-separated (e.g. .cmp-country-banner, nav)">
+      <div style="display:flex;gap:10px">
+        <button id="scrapeBtn" onclick="scrape()" style="flex:1">Scrape & Ingest (main content only)</button>
+        <button class="ghost" id="previewBtn" onclick="preview()">Preview Tags</button>
+      </div>
+      <div class="chipbox" id="chipbox" style="display:none">
+        <div class="hint">Click a selector to toggle it into <b style="color:var(--accent2)">Include</b>; right-click for <b style="color:var(--danger)">Exclude</b>.</div>
+        <div class="chips" id="chips"></div>
+      </div>
+    </div>
+
+    <div class="card section-gap" id="pointsCard" style="display:none">
+      <h2>Stored Points</h2>
+      <table>
+        <thead><tr><th>ID</th><th>Text</th><th>Metadata</th><th></th></tr></thead>
+        <tbody id="pointsBody"></tbody>
+      </table>
+      <div id="pointsEmpty" class="empty" style="display:none">No points yet — ingest some documents.</div>
+      <button class="ghost" id="loadMore" style="display:none;margin-top:12px" onclick="loadPoints(true)">Load more</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = `http://${location.hostname}:8765/api`;
+const ICON_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
+const ICON_REFETCH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>';
+const ICON_DELETE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+let selected = null, nextOffset = null, editingId = null, editingDocId = null;
+
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+}
+
+function toast(msg, err = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show' + (err ? ' err' : '');
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+async function refreshStatus() {
+  try {
+    const h = await api('/health');
+    document.getElementById('status').innerHTML =
+      `<span class="pill ${h.qdrant ? 'ok' : 'bad'}">Qdrant ${h.qdrant ? '●' : '○'}</span>` +
+      `<span class="pill ${h.ollama ? 'ok' : 'bad'}">Ollama ${h.ollama ? '●' : '○'}</span>` +
+      `<span class="pill ${h.firecrawl ? 'ok' : 'bad'}">Firecrawl ${h.firecrawl ? '●' : '○'}</span>` +
+      `<span class="pill ${h.reranker ? 'ok' : 'bad'}">Reranker ${h.reranker ? '●' : '○'}</span>` +
+      `<span class="pill">embed: ${h.embed_model} (${h.embed_dim}d)</span>` +
+      `<a class="link" href="http://${location.hostname}:8771" target="_blank">→ Query UI</a>`;
+  } catch { document.getElementById('status').innerHTML = '<span class="pill bad">Backend offline</span>'; }
+}
+
+async function loadSettings() {
+  try {
+    const s = await api('/settings');
+    document.getElementById('qsTopk').value = s.top_k ?? 5;
+    document.getElementById('qsCandk').value = s.candidate_k ?? 20;
+    document.getElementById('qsThresh').value = s.score_threshold ?? '';
+    document.getElementById('qsHnswef').value = s.hnsw_ef ?? 0;
+    document.getElementById('qsHnswefVal').textContent = s.hnsw_ef ? '[' + s.hnsw_ef + ']' : '[default]';
+    document.getElementById('qsExact').checked = !!s.exact;
+    document.getElementById('qsFkey').value = s.filter_key ?? '';
+    document.getElementById('qsFval').value = s.filter_value ?? '';
+    document.getElementById('qsGen').checked = !!s.generate;
+    document.getElementById('qsRerank').checked = !!s.rerank;
+  } catch {}
+}
+
+async function saveSettings() {
+  try {
+    await api('/settings', { method: 'PUT', body: JSON.stringify({
+      top_k: parseInt(document.getElementById('qsTopk').value) || 5,
+      candidate_k: parseInt(document.getElementById('qsCandk').value) || 20,
+      score_threshold: parseFloat(document.getElementById('qsThresh').value) || null,
+      hnsw_ef: parseInt(document.getElementById('qsHnswef').value) || null,
+      exact: document.getElementById('qsExact').checked,
+      filter_key: document.getElementById('qsFkey').value.trim() || null,
+      filter_value: document.getElementById('qsFval').value || null,
+      generate: document.getElementById('qsGen').checked,
+      rerank: document.getElementById('qsRerank').checked,
+    }) });
+    toast('Query settings saved');
+  } catch (e) { toast(e.message, true); }
+}
+
+async function refreshCollections() {
+  const { collections } = await api('/collections');
+  collections.sort((a, b) => a.name.localeCompare(b.name));
+  const el = document.getElementById('collections');
+  if (!collections.length) { el.innerHTML = '<div class="empty">No collections yet.</div>'; return; }
+  el.innerHTML = collections.map(c => `
+    <div class="col-item ${c.name === selected ? 'active' : ''}" onclick="selectCollection('${c.name}')">
+      <div><div class="name">${c.name}</div>
+      <div class="meta">${c.points ?? 0} pts · ${c.vector_size}d · ${c.distance}</div></div>
+      <button class="del" onclick="event.stopPropagation();deleteCollection('${c.name}')">✕</button>
+    </div>`).join('');
+}
+
+async function createCollection() {
+  let name = document.getElementById('newColName').value.trim();
+  if (!name) return toast('Enter a collection name', true);
+  const priv = document.getElementById('newColPrivate').checked;
+  if (priv && !name.startsWith('private-')) name = 'private-' + name;
+  try {
+    await api('/collections', { method: 'POST', body: JSON.stringify({ name, distance: document.getElementById('newColDist').value }) });
+    toast(`Created "${name}"`); document.getElementById('newColName').value = '';
+    document.getElementById('newColPrivate').checked = false;
+    refreshCollections();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function deleteCollection(name) {
+  if (!confirm(`Delete collection "${name}" and all its points?`)) return;
+  try { await api(`/collections/${name}`, { method: 'DELETE' }); toast(`Deleted "${name}"`);
+    if (selected === name) { selected = null; document.getElementById('ingestCard').style.display = 'none'; document.getElementById('pointsCard').style.display = 'none'; }
+    refreshCollections();
+  } catch (e) { toast(e.message, true); }
+}
+
+function selectCollection(name) {
+  selected = name; nextOffset = null;
+  document.getElementById('ingestCard').style.display = 'block';
+  document.getElementById('pointsCard').style.display = 'block';
+  document.getElementById('ingestTarget').textContent = name;
+  document.getElementById('scrapeTarget').textContent = name;
+  refreshCollections(); loadPoints();
+}
+
+function addMetaRow() {
+  const d = document.createElement('div');
+  d.className = 'kv'; d.innerHTML = '<input placeholder="metadata key" class="mk"><input placeholder="value" class="mv">';
+  document.getElementById('metaRows').appendChild(d);
+}
+
+function collectMeta() {
+  const m = {};
+  document.querySelectorAll('#metaRows .kv').forEach(r => {
+    const k = r.querySelector('.mk').value.trim(), v = r.querySelector('.mv').value;
+    if (k) m[k] = v;
+  });
+  return m;
+}
+
+async function ingest(batch) {
+  const text = document.getElementById('docText').value.trim();
+  if (!text) return toast('Enter document text', true);
+  const meta = collectMeta();
+  if (editingDocId) {
+    try {
+      const r = await api(`/collections/${selected}/docs/${editingDocId}`, { method: 'PUT', body: JSON.stringify({ text, metadata: meta }) });
+      toast(`Document updated (${r.chunks} chunks)`); cancelEdit();
+      document.getElementById('docText').value = '';
+      refreshCollections(); loadPoints();
+    } catch (e) { toast(e.message, true); }
+    return;
+  }
+  if (editingId) {
+    try {
+      await api(`/collections/${selected}/points/${editingId}`, { method: 'PUT', body: JSON.stringify({ text, metadata: meta }) });
+      toast('Point updated'); cancelEdit();
+      document.getElementById('docText').value = '';
+      refreshCollections(); loadPoints();
+    } catch (e) { toast(e.message, true); }
+    return;
+  }
+  const docs = batch
+    ? text.split('\n').map(l => l.trim()).filter(Boolean).map(t => ({ text: t, metadata: { ...meta } }))
+    : [{ text, metadata: meta }];
+  try {
+    const r = await api(`/collections/${selected}/ingest`, { method: 'POST', body: JSON.stringify({ documents: docs }) });
+    toast(`Ingested ${r.ingested} document(s)`);
+    document.getElementById('docText').value = '';
+    refreshCollections(); loadPoints();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function loadPoints(append = false) {
+  if (!append) { nextOffset = null; document.getElementById('pointsBody').innerHTML = ''; }
+  const url = `/collections/${selected}/points?limit=50` + (nextOffset ? `&offset=${nextOffset}` : '');
+  const r = await api(url);
+  nextOffset = r.next_offset;
+  document.getElementById('loadMore').style.display = nextOffset ? 'inline-block' : 'none';
+  const body = document.getElementById('pointsBody');
+  document.getElementById('pointsEmpty').style.display = (!append && !r.points.length) ? 'block' : 'none';
+  r.points.sort((a, b) => {
+    const pa = a.payload || {}, pb = b.payload || {};
+    const sa = pa.source || pa.title || '', sb = pb.source || pb.title || '';
+    if (sa !== sb) return sa.localeCompare(sb);
+    return (pa.chunk_index ?? 0) - (pb.chunk_index ?? 0);
+  });
+  r.points.forEach(p => {
+    const { text = '', ...meta } = p.payload || {};
+    const INTERNAL = ['doc_id', 'chunk_index', 'chunk_count', 'include_tags', 'exclude_tags', 'doc_text'];
+    const visibleMeta = Object.fromEntries(Object.entries(meta).filter(([k]) => !INTERNAL.includes(k)));
+    const chunkBadge = meta.chunk_count > 1 ? `<div style="font-size:11px;color:var(--accent);margin-bottom:4px">chunk ${meta.chunk_index + 1}/${meta.chunk_count}</div>` : '';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td style="font-family:monospace;font-size:11px">${p.id.slice(0, 8)}…</td>
+      <td>${chunkBadge}<span class="text" title="${text.replace(/"/g, '&quot;')}">${text.split('\n').slice(0, 5).join('\n').replace(/</g, '&lt;')}${text.split('\n').length > 5 ? ' …' : ''}</span></td>
+      <td style="font-size:12px;color:var(--muted)">${Object.entries(visibleMeta).map(([k, v]) => `${k}=${v}`).join('<br>') || '—'}</td>
+      <td class="row-actions"><button title="Edit document" onclick='editPoint(${JSON.stringify(p.id)}, ${JSON.stringify(meta.doc_id || null)})'>${ICON_EDIT}</button> ${meta.source ? `<button title="Refetch from source" onclick="refetchPoint('${p.id}')">${ICON_REFETCH}</button>` : ''} <button class="del" title="Delete document" onclick='deletePoint(${JSON.stringify(p.id)}, ${JSON.stringify(meta.doc_id || null)})'>${ICON_DELETE}</button></td>`;
+    body.appendChild(tr);
+  });
+}
+
+const INTERNAL_META = ['doc_id', 'chunk_index', 'chunk_count', 'include_tags', 'exclude_tags', 'doc_text'];
+
+async function editPoint(id, docId) {
+  try {
+    let text, meta;
+    if (docId) {
+      const d = await api(`/collections/${selected}/docs/${docId}`);
+      text = d.text; meta = d.metadata; editingDocId = docId; editingId = null;
+    } else {
+      const pts = await api(`/collections/${selected}/points?limit=100`);
+      const p = pts.points.find(x => x.id === id);
+      text = p?.payload?.text || ''; meta = p?.payload || {}; delete meta.text;
+      editingId = id; editingDocId = null;
+    }
+    document.getElementById('docText').value = text;
+    const rows = document.getElementById('metaRows');
+    rows.innerHTML = '';
+    const entries = Object.entries(meta).filter(([k]) => !INTERNAL_META.includes(k));
+    if (!entries.length) rows.innerHTML = '<div class="kv"><input placeholder="metadata key" class="mk"><input placeholder="value" class="mv"></div>';
+    entries.forEach(([k, v]) => {
+      const d = document.createElement('div');
+      d.className = 'kv';
+      d.innerHTML = '<input class="mk"><input class="mv">';
+      d.querySelector('.mk').value = k; d.querySelector('.mv').value = v;
+      rows.appendChild(d);
+    });
+    document.getElementById('ingestBtn').textContent = docId ? 'Update Document' : 'Update Point';
+    document.getElementById('cancelEdit').style.display = 'inline-block';
+    document.getElementById('docText').focus();
+  } catch (e) { toast(e.message, true); }
+}
+
+function cancelEdit() {
+  editingId = null; editingDocId = null;
+  document.getElementById('ingestBtn').textContent = 'Ingest Single Doc';
+  document.getElementById('cancelEdit').style.display = 'none';
+}
+
+function fieldTags(id) {
+  return document.getElementById(id).value.split(',').map(s => s.trim()).filter(Boolean);
+}
+function setFieldTags(id, tags) {
+  document.getElementById(id).value = tags.join(', ');
+}
+
+function toggleTag(sel, target) {
+  const inc = fieldTags('scrapeInclude'), exc = fieldTags('scrapeExclude');
+  const inInc = inc.indexOf(sel), inExc = exc.indexOf(sel);
+  if (target === 'inc') {
+    if (inInc >= 0) inc.splice(inInc, 1); else { inc.push(sel); if (inExc >= 0) exc.splice(inExc, 1); }
+  } else {
+    if (inExc >= 0) exc.splice(inExc, 1); else { exc.push(sel); if (inInc >= 0) inc.splice(inInc, 1); }
+  }
+  setFieldTags('scrapeInclude', inc); setFieldTags('scrapeExclude', exc);
+  markChips();
+}
+
+function markChips() {
+  const inc = fieldTags('scrapeInclude'), exc = fieldTags('scrapeExclude');
+  document.querySelectorAll('#chips .chip').forEach(c => {
+    c.classList.toggle('in-inc', inc.includes(c.dataset.sel));
+    c.classList.toggle('in-exc', exc.includes(c.dataset.sel));
+  });
+}
+
+async function preview() {
+  const url = document.getElementById('scrapeUrl').value.trim();
+  if (!url) return toast('Enter a URL first', true);
+  const btn = document.getElementById('previewBtn');
+  btn.disabled = true; btn.textContent = 'Loading…';
+  try {
+    const r = await api('/scrape/preview', { method: 'POST', body: JSON.stringify({ url }) });
+    const chips = document.getElementById('chips');
+    const group = (label, items) =>
+      (items.length ? `<div class="group-label">${label}</div>` : '') +
+      items.map(i => `<span class="chip" data-sel="${i.selector}" title="${i.count} occurrence(s)">${i.selector}<span class="n">${i.count}</span></span>`).join('');
+    chips.innerHTML = group('IDs', r.ids) + group('Classes', r.classes) + group('Tags', r.tags);
+    chips.querySelectorAll('.chip').forEach(c => {
+      c.onclick = () => toggleTag(c.dataset.sel, 'inc');
+      c.oncontextmenu = e => { e.preventDefault(); toggleTag(c.dataset.sel, 'exc'); };
+    });
+    document.getElementById('chipbox').style.display = 'block';
+    markChips();
+  } catch (e) { toast(e.message, true); }
+  finally { btn.disabled = false; btn.textContent = 'Preview Tags'; }
+}
+
+async function scrape() {
+  const url = document.getElementById('scrapeUrl').value.trim();
+  if (!url) return toast('Enter a URL', true);
+  const btn = document.getElementById('scrapeBtn');
+  btn.disabled = true; btn.textContent = 'Scraping…';
+  try {
+    const exclude = document.getElementById('scrapeExclude').value.split(',').map(s => s.trim()).filter(Boolean);
+    const include = document.getElementById('scrapeInclude').value.split(',').map(s => s.trim()).filter(Boolean);
+    const r = await api(`/collections/${selected}/scrape`, { method: 'POST', body: JSON.stringify({ url, metadata: collectMeta(), exclude_tags: exclude, include_tags: include }) });
+    toast(`Ingested "${r.title || r.url}" (${r.chars} chars)`);
+    document.getElementById('scrapeUrl').value = '';
+    refreshCollections(); loadPoints();
+  } catch (e) { toast(e.message, true); }
+  finally { btn.disabled = false; btn.textContent = 'Scrape & Ingest (main content only)'; }
+}
+
+async function refetchPoint(id) {
+  try {
+    const r = await api(`/collections/${selected}/points/${id}/refetch`, { method: 'POST' });
+    toast(`Refetched (${r.chars} chars)`); loadPoints();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function deletePoint(id, docId) {
+  try {
+    if (docId) {
+      await api(`/collections/${selected}/docs/${docId}`, { method: 'DELETE' });
+      toast('Document deleted');
+    } else {
+      await api(`/collections/${selected}/points/${id}`, { method: 'DELETE' });
+      toast('Point deleted');
+    }
+    loadPoints(); refreshCollections();
+  } catch (e) { toast(e.message, true); }
+}
+
+refreshStatus(); refreshCollections().then(loadSettings);
+setInterval(refreshStatus, 15000);
+</script>
+</body>
+</html>
