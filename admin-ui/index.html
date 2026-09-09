@@ -115,8 +115,9 @@
 <body>
 <div id="mobileSplash">
   <div class="card">
-    <h2>Desktop Required</h2>
+    <h2>Desktop Required<br><span style="font-size:16px;color:var(--muted);">Retrieval Augmented Generation</span></h2>
     <p>This system is designed for larger screens. Please visit on a desktop or laptop computer to use it.</p>
+    <p style="margin-top:14px;"><a href="https://github.com/drintoul/rag-demo" target="_blank" rel="noopener" class="link">View source on GitHub</a></p>
   </div>
 </div>
 <header>
@@ -211,7 +212,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const API = `http://${location.hostname}:8765/api`;
+const API = '/api';
 const ICON_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
 const ICON_REFETCH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>';
 const ICON_DELETE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';

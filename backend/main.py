@@ -123,7 +123,7 @@ class QueryRequest(BaseModel):
 
 SETTINGS_FILE = os.getenv("SETTINGS_FILE", "/data/settings.json")
 DEFAULT_SETTINGS = {
-    "collection": None,
+    "collection": "canada-constitution",
     "top_k": 5,
     "score_threshold": None,
     "filter_key": None,
@@ -181,7 +181,9 @@ async def generate_answer(query: str, hits: list[dict], model: Optional[str] = N
         "When blocks come from different sources or entities (e.g. different cruise lines), "
         "clearly attribute each part of your answer to its source — never blend policies or facts "
         "across sources into a single undifferentiated answer. "
-        "Attribute naturally in prose (e.g. 'According to Princess Cruises, …'); "
+        "Cite the specific source for each fact using its source label from the context. "
+        "Begin with the source name, e.g. 'According to the British North America Act, 1867, …' or 'As stated in [source label], …'. "
+        "Do NOT say 'according to the context', 'the context states', or other generic phrases. "
         "do NOT append bracketed citations like '(Source: [1] …)' — the UI lists sources separately. "
         "Include ALL relevant details from the context (e.g. every location, date, or option mentioned). "
         "If the context does not contain the answer, say so. Be concise but complete.\n\n"
@@ -190,7 +192,8 @@ async def generate_answer(query: str, hits: list[dict], model: Optional[str] = N
     async with httpx.AsyncClient(timeout=180) as client:
         resp = await client.post(
             f"{OLLAMA_URL}/api/generate",
-            json={"model": model or LLM_MODEL, "prompt": prompt, "stream": False},
+            json={"model": model or LLM_MODEL, "prompt": prompt, "stream": False,
+                  "options": {"temperature": 0}},
         )
         if resp.status_code != 200:
             raise HTTPException(502, f"Ollama generate failed: {resp.text}")

@@ -48,6 +48,7 @@ Copy `.env.example` to `.env` and adjust:
 - `SCRAPE_INCLUDE_TAGS`, `SCRAPE_EXCLUDE_TAGS` — default CSS selectors applied to every scrape (per-request overrides in the Admin UI)
 - `QDRANT_HOST`, `QDRANT_PORT`, `QDRANT_API_KEY` — Qdrant connection
 - `*_PORT` — host port mappings
+- `CLOUDFLARE_TUNNEL_TOKEN` — optional token to expose the stack via Cloudflare Tunnel
 
 `.env` is gitignored; commit `.env.example` only.
 
@@ -60,6 +61,33 @@ Qdrant data is bind-mounted to `./data/qdrant`; reranker model cache to `./data/
 ## Networking
 
 Ollama and Firecrawl are reached via the external `app-network` docker network. If your Ollama container isn't on it, either connect it (`docker network connect app-network ollama`) or set `OLLAMA_URL=http://host.docker.internal:11434` and add `extra_hosts: ["host.docker.internal:host-gateway"]` to the backend service.
+
+## Cloudflare Tunnel
+
+To expose the UI and API over the internet without opening firewall ports, the compose file includes a `cloudflared` service that starts by default.
+
+1. In the [Cloudflare Zero Trust dashboard](https://one.dash.cloudflare.com/), create a new tunnel and copy its **token**.
+2. Add the token to `.env`:
+
+```bash
+CLOUDFLARE_TUNNEL_TOKEN=<your-token>
+```
+
+3. Start the stack as normal:
+
+```bash
+docker compose up -d --build
+```
+
+> The `cloudflared` container starts with the rest of the stack and requires a valid `CLOUDFLARE_TUNNEL_TOKEN` to connect.
+
+4. In the tunnel's **Public Hostnames** settings, route each service to the container name on `rag-network`:
+
+- `http://admin-ui:80` for the Admin UI
+- `http://query-ui:80` for the Query UI
+- `http://backend:8000` for the FastAPI backend / API docs
+
+Cloudflare Tunnel connects outbound-only to the Cloudflare edge, so no inbound firewall rules are needed. Because the Admin UI has unauthenticated write access to the knowledge base, protect its hostname with **Cloudflare Access** before sharing it.
 
 ## Security & Threat Model
 
