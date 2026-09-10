@@ -58,11 +58,6 @@ docker compose up -d --build
   <em>Admin UI — collection management, ingestion, scraping, document maintenance, and retrieval tuning.</em>
 </p>
 
-![Query UI](docs/query-ui.png)
-
-![Admin UI](docs/admin-ui.png)
-
-
 ## Configuration
 
 Configuration is loaded from `.env`. The repository includes `.env.example` as a starting point.
