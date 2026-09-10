@@ -204,18 +204,18 @@
 </div>
 
 <div class="search-box">
+  <div class="opts" style="margin-bottom:14px">
+    <div class="field wide" style="margin-bottom:0">
+      <span class="lbl">Collection</span>
+      <select id="collection" title="Vector collection to search" onchange="loadDocs(this.value)"></select>
+    </div>
+  </div>
   <div class="row">
     <input id="q" placeholder="Ask something…" onkeydown="if(event.key==='Enter')search()">
     <button id="go" onclick="search()">Search</button>
     <div class="gen-toggle" style="margin-top:0;flex:0 0 auto">
       <label for="pro" style="cursor:pointer">Pro Mode</label>
-      <input type="checkbox" id="pro" onchange="togglePro()">
-    </div>
-  </div>
-  <div class="opts">
-    <div class="field wide">
-      <span class="lbl">Collection</span>
-      <select id="collection" title="Vector collection to search" onchange="loadDocs(this.value)"></select>
+      <input type="checkbox" id="pro" onchange="togglePro(this.checked)">
     </div>
   </div>
   <details class='docs-box' id='docsBox' style='display:none'>
@@ -314,15 +314,25 @@ async function search() {
     };
     const r = await api('/query', { method: 'POST', body: JSON.stringify(body) });
     if (r.answer) {
-      const cited = [...new Set([...r.answer.matchAll(/\[(\d+)\]/g)].map(m => parseInt(m[1]) - 1))].filter(i => r.results[i]);
-      const renum = Object.fromEntries(cited.map((i, idx) => [i + 1, idx + 1]));
-      const answerText = r.answer.replace(/\[(\d+)\]/g, (m, n) => `[${renum[parseInt(n)] || n}]`);
-      const srcList = cited.length
-        ? `<div class="srcs"><div class="srcs-label">Sources</div><ol>${cited.map(i => {
-            const p = r.results[i].payload || {};
-            const title = p.title || p.source || `Result ${i + 1}`;
-            return `<li>${p.source ? `<a href="${absUrl(p.source)}" target="_blank" rel="noopener">${title}</a>` : title}</li>`;
-          }).join('')}</ol></div>`
+      const rawCited = [...new Set([...r.answer.matchAll(/\[(\d+)\]/g)].map(m => parseInt(m[1]) - 1))].filter(i => r.results[i]);
+      const sourceToNum = {};
+      const sourceOrder = [];
+      for (const i of rawCited) {
+        const p = r.results[i].payload || {};
+        const source = (p.source || `result:${i + 1}`).trim();
+        if (sourceToNum[source] === undefined) {
+          sourceToNum[source] = sourceOrder.length + 1;
+          sourceOrder.push({ source, title: p.title || p.source || `Result ${i + 1}` });
+        }
+      }
+      const renum = Object.fromEntries(rawCited.map(i => {
+        const p = r.results[i].payload || {};
+        const source = (p.source || `result:${i + 1}`).trim();
+        return [i + 1, sourceToNum[source]];
+      }));
+      const answerText = r.answer.replace(/\[(\d+)\]/g, (m, n) => `[${renum[parseInt(n)]}]`);
+      const srcList = sourceOrder.length
+        ? `<div class="srcs"><div class="srcs-label">Sources</div><ol>${sourceOrder.map(({ title, source }) => `<li>${source ? `<a href="${absUrl(source)}" target="_blank" rel="noopener">${title}</a>` : title}</li>`).join('')}</ol></div>`
         : '';
       document.getElementById('answerBox').innerHTML = `<div class="answer"><div class="label">Curated Answer <span class="model">${r.llm_model || ''}</span></div><div class="body">${renderMarkdown(answerText)}</div>${srcList}</div>`;
     } else {

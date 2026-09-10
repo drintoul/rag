@@ -4,6 +4,7 @@ import os
 import re
 import uuid
 from typing import Any, Optional
+from urllib.parse import urljoin, urlparse, urlunparse
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -105,6 +106,20 @@ class ScrapeRequest(BaseModel):
     include_tags: list[str] = []
 
 
+class QuickCollectionRequest(BaseModel):
+    name: str = Field(..., min_length=1)
+    url: str
+    max_depth: int = 2
+    limit: int = 50
+    max_chars: int = 60000
+    chunk_size: int = 1500
+    chunk_overlap: int = 200
+    only_main: bool = True
+    include_tags: list[str] = []
+    exclude_tags: list[str] = []
+    metadata: dict[str, Any] = {}
+
+
 class QueryRequest(BaseModel):
     collection: Optional[str] = None
     query: str
@@ -179,7 +194,9 @@ async def generate_answer(query: str, hits: list[dict], model: Optional[str] = N
         "You are a helpful assistant. Answer the question using ONLY the context below. "
         "Synthesize the information into a clear, flowing answer. Do not repeat the same fact or restate the question. "
         "Do not begin every sentence with 'According to' or repeat the source title inside the answer. "
-        "Cite sources using ONLY the short bracket number [n] from the relevant context block, placed naturally at the end of the relevant clause or sentence. "
+        "You MUST cite sources for every factual claim and sentence using ONLY the short bracket number [n] from the relevant context block. "
+        "Place the bracket citation at the end of each sentence or clause that contains information from the context. "
+        "Do not omit citations — every sentence that includes facts from the context must have at least one [n] reference. "
         "Do not include source titles, URLs, or labels in the answer body — the Sources list shows them. "
         "When blocks come from different sources or entities (e.g. different cruise lines), clearly attribute each part of your answer to its source; never blend policies or facts across sources into a single undifferentiated answer. "
         "Do NOT say 'according to the context', 'the context states', or other generic phrases. "
@@ -607,6 +624,156 @@ async def ingest_chunks(name: str, url: str, title: str, req: ScrapeRequest,
 async def scrape_and_ingest(name: str, req: ScrapeRequest):
     collection_or_404(name)
     return await ingest_chunks(name, req.url, "", req)
+
+
+def ensure_collection_exists(name: str):
+    if qdrant.collection_exists(name):
+        return
+    qdrant.create_collection(
+        collection_name=name,
+        vectors_config=VectorParams(size=EMBED_DIM, distance=Distance.COSINE),
+    )
+
+
+async def ingest_markdown(name: str, url: str, title: str, md: str,
+                          chunk_size: int = 1500, chunk_overlap: int = 200,
+                          max_chars: int = 60000, metadata: dict = None) -> int:
+    text = clean_markdown(md)[:max_chars]
+    chunks = chunk_text(text, chunk_size, chunk_overlap)
+    if not chunks:
+        return 0
+    doc_id = str(uuid.uuid4())
+    vectors = await embed(chunks)
+    points = [
+        PointStruct(
+            id=str(uuid.uuid4()),
+            vector=v,
+            payload={
+                "text": c,
+                "source": url,
+                "title": title,
+                "doc_id": doc_id,
+                "chunk_index": i,
+                "chunk_count": len(chunks),
+                **({"doc_text": text} if i == 0 else {}),
+                **(metadata or {}),
+            },
+        )
+        for i, (c, v) in enumerate(zip(chunks, vectors))
+    ]
+    qdrant.upsert(collection_name=name, points=points)
+    return len(points)
+
+
+async def fetch_scrape(url: str, include_tags: list[str], exclude_tags: list[str],
+                       only_main: bool = True) -> tuple[str, str, dict]:
+    """Scrape a URL via Firecrawl; returns (markdown, rawHtml, metadata)."""
+    headers = {"Content-Type": "application/json"}
+    if FIRECRAWL_API_KEY:
+        headers["Authorization"] = f"Bearer {FIRECRAWL_API_KEY}"
+
+    async def do_scrape(use_includes: bool) -> dict:
+        body = {
+            "url": url,
+            "formats": ["markdown", "rawHtml"],
+            "onlyMainContent": only_main,
+        }
+        if use_includes and include_tags:
+            body["includeTags"] = include_tags
+        if exclude_tags:
+            body["excludeTags"] = exclude_tags
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(
+                f"{FIRECRAWL_URL}/v1/scrape",
+                json=body,
+                headers=headers,
+            )
+        if resp.status_code != 200:
+            raise HTTPException(502, f"Firecrawl scrape failed: {resp.text}")
+        data = resp.json()
+        if not data.get("success"):
+            raise HTTPException(502, f"Firecrawl error: {data}")
+        return data["data"]
+
+    page = await do_scrape(use_includes=bool(include_tags))
+    if not page.get("markdown", "").strip() and include_tags:
+        page = await do_scrape(use_includes=False)
+    return page.get("markdown", ""), page.get("rawHtml", ""), page.get("metadata", {})
+
+
+@app.post("/api/quick-collection")
+async def quick_collection(req: QuickCollectionRequest):
+    ensure_collection_exists(req.name)
+
+    parsed_base = urlparse(req.url)
+    origin = f"{parsed_base.scheme}://{parsed_base.netloc}"
+    base_path = parsed_base.path.strip('/')
+    base_keywords = {base_path.split('/')[-1]}
+    if base_path.endswith('s'):
+        base_keywords.add(base_path[:-1])
+
+    def link_score(u: str) -> int:
+        path = urlparse(u).path.lower()
+        if any(k in path for k in base_keywords if k):
+            return 0
+        return 1
+
+    def normalize(u: str) -> str:
+        p = urlparse(u)
+        return urlunparse(p._replace(fragment=""))
+
+    queue = [(normalize(req.url), 0)]
+    seen = {queue[0][0]}
+    scraped = []
+    total_points = 0
+
+    include_tags = req.include_tags or DEFAULT_INCLUDE_TAGS
+    exclude_tags = req.exclude_tags or DEFAULT_EXCLUDE_TAGS
+
+    while queue and len(scraped) < req.limit:
+        url, depth = queue.pop(0)
+        try:
+            md, html, meta = await fetch_scrape(
+                url, include_tags, exclude_tags, req.only_main
+            )
+        except HTTPException:
+            continue
+
+        md = md.strip()
+        if not md:
+            continue
+
+        title = meta.get("title") or url
+        total_points += await ingest_markdown(
+            req.name, url, title, md,
+            req.chunk_size, req.chunk_overlap, req.max_chars, req.metadata
+        )
+        scraped.append(url)
+
+        if depth >= req.max_depth or not html:
+            continue
+
+        anchors = re.findall(r'<a[^>]+href=["\'](.*?)["\']', html, re.IGNORECASE)
+        candidates = []
+        for a in anchors:
+            u = urljoin(url, a)
+            p = urlparse(u)
+            if p.netloc != parsed_base.netloc:
+                continue
+            u = normalize(u)
+            if u in seen:
+                continue
+            seen.add(u)
+            candidates.append(u)
+
+        candidates.sort(key=link_score)
+        for c in candidates:
+            if len(queue) + len(scraped) < req.limit:
+                queue.append((c, depth + 1))
+            else:
+                break
+
+    return {"collection": req.name, "pages": len(scraped), "chunks": total_points}
 
 
 def doc_points(name: str, doc_id: str) -> list:

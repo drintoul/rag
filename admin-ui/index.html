@@ -168,6 +168,17 @@
       </div>
       <button class="ghost" onclick="saveSettings()" style="width:100%">Save Query Settings</button>
     </div>
+
+    <div class="card section-gap">
+      <h2>Quick Collection</h2>
+      <input id="quickName" placeholder="Collection name">
+      <input id="quickUrl" placeholder="https://example.com">
+      <div class="kv">
+        <input id="quickDepth" type="number" min="1" max="5" value="2" placeholder="Max depth">
+        <input id="quickLimit" type="number" min="1" max="200" value="50" placeholder="Max pages">
+      </div>
+      <button id="quickBtn" onclick="quickCollection()" style="width:100%">Map, Scrape & Ingest</button>
+    </div>
   </div>
 
   <div>
@@ -275,6 +286,25 @@ async function saveSettings() {
     toast('Query settings saved');
   } catch (e) { toast(e.message, true); }
 }
+
+async function quickCollection() {
+  const name = document.getElementById('quickName').value.trim();
+  const url = document.getElementById('quickUrl').value.trim();
+  if (!name || !url) return toast('Enter a collection name and root URL', true);
+  const max_depth = parseInt(document.getElementById('quickDepth').value) || 2;
+  const limit = parseInt(document.getElementById('quickLimit').value) || 50;
+  const btn = document.getElementById('quickBtn');
+  btn.disabled = true; btn.textContent = 'Scraping…';
+  try {
+    const r = await api('/quick-collection', { method: 'POST', body: JSON.stringify({ name, url, max_depth, limit }) });
+    toast(`Quick collection "${name}" ingested ${r.pages} pages (${r.chunks} chunks)`);
+    document.getElementById('quickName').value = '';
+    document.getElementById('quickUrl').value = '';
+    refreshCollections();
+  } catch (e) { toast(e.message, true); }
+  finally { btn.disabled = false; btn.textContent = 'Map, Scrape & Ingest'; }
+}
+
 
 async function refreshCollections() {
   const { collections } = await api('/collections');
