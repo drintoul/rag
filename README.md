@@ -6,7 +6,7 @@ A self-hosted retrieval-augmented generation (RAG) stack for querying your own k
 
 | Service    | Port  | Purpose                                          |
 |------------|-------|--------------------------------------------------|
-| qdrant     | 6353  | Vector DB (REST), 6354 gRPC                      |
+| qdrant     | —     | Vector DB (internal to Docker network)           |
 | backend    | 8765  | FastAPI — scrape, chunk, embed, ingest, query    |
 | reranker   | —     | bge-reranker-v2-m3 cross-encoder (internal)      |
 | admin-ui   | 8770  | Collections, scraping, document management       |
@@ -97,7 +97,7 @@ The FastAPI backend exposes unauthenticated `POST/PUT/DELETE` routes for creatin
 
 **Why that is acceptable here:**
 
-- The demo is self-hosted, uses only publicly available input data, and is not exposed to real users or real PII.
+- The demo is self-hosted, uses only publicly available input data, and contains no production, customer, or sensitive PII.
 - This discussion highlights a real-world challenge experienced by companies: a RAG knowledge base with unauthenticated write access can be poisoned by anyone who can reach the API.
 - The author's production system is separate and hardened.
 
