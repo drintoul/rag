@@ -4,8 +4,8 @@ services:
     container_name: rag-qdrant
     restart: unless-stopped
     ports:
-      - "${QDRANT_HTTP_PORT:-6353}:6333"
-      - "${QDRANT_GRPC_PORT:-6354}:6334"
+      - "${QDRANT_HTTP_PORT}:6333"
+      - "${QDRANT_GRPC_PORT}:6334"
     volumes:
       - ./data/qdrant:/qdrant/storage
     ulimits:
@@ -25,7 +25,7 @@ services:
     container_name: rag-reranker
     restart: unless-stopped
     environment:
-      RERANK_MODEL: ${RERANK_MODEL:-BAAI/bge-reranker-v2-m3}
+      RERANK_MODEL: ${RERANK_MODEL}
       HF_HOME: /data
     volumes:
       - ./data/reranker:/data
@@ -37,21 +37,21 @@ services:
     container_name: rag-backend
     restart: unless-stopped
     environment:
-      QDRANT_HOST: ${QDRANT_HOST:-rag-qdrant}
-      QDRANT_PORT: ${QDRANT_PORT:-6333}
-      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
-      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
-      EMBED_MODEL: ${EMBED_MODEL:-nomic-embed-text}
-      EMBED_DIM: ${EMBED_DIM:-768}
-      LLM_MODEL: ${LLM_MODEL:-llama3.2:latest}
-      RERANKER_URL: ${RERANKER_URL:-http://reranker:80}
-      FIRECRAWL_URL: ${FIRECRAWL_URL:-http://firecrawl-api:3002}
-      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+      QDRANT_HOST: ${QDRANT_HOST}
+      QDRANT_PORT: ${QDRANT_PORT}
+      QDRANT_API_KEY: ${QDRANT_API_KEY}
+      OLLAMA_URL: ${OLLAMA_URL}
+      EMBED_MODEL: ${EMBED_MODEL}
+      EMBED_DIM: ${EMBED_DIM}
+      LLM_MODEL: ${LLM_MODEL}
+      RERANKER_URL: ${RERANKER_URL}
+      FIRECRAWL_URL: ${FIRECRAWL_URL}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}
       SETTINGS_FILE: /data/settings.json
     volumes:
       - ./data/backend:/data
     ports:
-      - "${BACKEND_PORT:-8765}:8000"
+      - "${BACKEND_PORT}:8000"
     networks:
       - rag-network
       - app-network
@@ -72,7 +72,7 @@ services:
       - ./admin-ui:/usr/share/nginx/html:ro
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-      - "${ADMIN_UI_PORT:-8770}:80"
+      - "${ADMIN_UI_PORT}:80"
     networks:
       - rag-network
     depends_on:
@@ -86,7 +86,7 @@ services:
       - ./query-ui:/usr/share/nginx/html:ro
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-      - "${QUERY_UI_PORT:-8771}:80"
+      - "${QUERY_UI_PORT}:80"
     networks:
       - rag-network
     depends_on:
