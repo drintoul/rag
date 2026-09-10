@@ -42,10 +42,26 @@ docker compose up -d --build
 * **API docs**: http://localhost:8765/docs
 
 ### Screenshots
+<p align="center">
+  <img src="docs/query-ui.png" alt="RAG Query UI" width="900">
+</p>
+
+<p align="center">
+  <em>Query UI — semantic search with curated LLM answers, numbered source attribution, and Pro Mode retrieval details.</em>
+</p>
+
+<p align="center">
+  <img src="docs/admin-ui.png" alt="RAG Admin UI" width="900">
+</p>
+
+<p align="center">
+  <em>Admin UI — collection management, ingestion, scraping, document maintenance, and retrieval tuning.</em>
+</p>
 
 ![Query UI](docs/query-ui.png)
 
 ![Admin UI](docs/admin-ui.png)
+
 
 ## Configuration
 
