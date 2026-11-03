@@ -29,7 +29,7 @@ EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 EMBED_DIM = int(os.getenv("EMBED_DIM", "768"))
 LLM_MODEL = os.getenv("LLM_MODEL", "llama3.2:latest")
 RERANKER_URL = os.getenv("RERANKER_URL", "").rstrip("/")
-FIRECRAWL_URL = os.getenv("FIRECRAWL_URL", "http://firecrawl-api:3002").rstrip("/")
+FIRECRAWL_URL = os.getenv("FIRECRAWL_URL", "http://firecrawl-extended-gateway:8080").rstrip("/")
 FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY") or None
 
 # Boilerplate selectors excluded from every scrape (overlays, nav, consent, etc.)
