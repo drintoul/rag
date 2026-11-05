@@ -37,9 +37,11 @@ Then start the stack:
 docker compose up -d --build
 ```
 
-* **Admin UI**: http://localhost:8770 — create collections (a **Private** toggle prefixes the name with `private-`, hiding it from the Query UI), ingest text, scrape URLs (with a "Preview Tags" selector picker), manage documents (edit re-chunks, refetch re-scrapes the source URL, delete removes all chunks of a doc), and tune **Query Settings**: top-k, candidate-k rerank pool, min similarity score, metadata filters, LLM answer, rerank, hnsw_ef slider, and exact search. Settings persist in `./data/backend/settings.json`.
-* **Query UI**: http://localhost:8771 — pick a collection and ask questions in plain English. Curated answers include a numbered **Sources** list mapping `[n]` citations to their links. **Pro Mode** reveals the scored chunks behind each answer and a "Documents in this knowledge base" list. Mobile viewports get a desktop-required splash.
+* **Admin UI**: http://localhost:8770/?pin=123456 — create collections (a **Private** toggle prefixes the name with `private-`, hiding it from the Query UI), ingest text, scrape URLs (with a "Preview Tags" selector picker), manage documents (edit re-chunks, refetch re-scrapes the source URL, delete removes all chunks of a doc), and tune **Query Settings**: top-k, candidate-k rerank pool, min similarity score, metadata filters, LLM answer, rerank, hnsw_ef slider, and exact search. Settings persist in `./data/backend/settings.json`.
+* **Query UI**: http://localhost:8771/?pin=123456 — pick a collection and ask questions in plain English. Curated answers include a numbered **Sources** list mapping `[n]` citations to their links. **Pro Mode** reveals the scored chunks behind each answer and a "Documents in this knowledge base" list. Mobile viewports get a desktop-required splash.
 * **API docs**: http://localhost:8765/docs
+
+> Both UIs are gated by a PIN passed as a `?pin=` query parameter (default `123456`). Requests without it get `403 Access Denied`. Change the PIN in `nginx/default.conf` (`set $required_pin`). This is a light gate, not real authentication — see [Security & Threat Model](#security--threat-model).
 
 ### Screenshots
 <p align="center">
